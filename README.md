@@ -58,7 +58,22 @@ conversor de nível. Leia a seção de energia antes de alimentar pela TELEM1.
 **2. Configure o ArduPilot** — [docs/ARDUPILOT.md](docs/ARDUPILOT.md).
 `SERIAL1_PROTOCOL`, `SERIAL1_BAUD`, as taxas de stream e o failsafe de GCS.
 
-**3. Grave o firmware:**
+**3. Grave o firmware.** O PlatformIO tem que vir do **instalador oficial**, não
+de `pip install platformio`:
+
+```bash
+curl -fsSL -o /tmp/get-platformio.py \
+  https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py
+python3 /tmp/get-platformio.py
+export PATH="$PATH:$HOME/.platformio/penv/bin"
+```
+
+O `micro_ros_platformio` compila micro-ROS da fonte dentro do virtualenv
+próprio do PlatformIO (`~/.platformio/penv`), que só o instalador oficial cria —
+ele isola o `empy 3.3.4` que o micro-ROS exige do `empy 4.x` do sistema. Com o
+PlatformIO vindo do pip, tudo funciona até o micro-ROS começar a compilar, e aí
+sai `cannot open .platformio/penv/bin/activate`, que não menciona pip nem
+instalação.
 
 ```bash
 cd firmware
@@ -66,6 +81,9 @@ cp include/secrets.h.example include/secrets.h   # SSID, senha e IP do agente
 pio run -e humble -t upload                      # ou -e jazzy
 pio device monitor
 ```
+
+A primeira compilação demora vários minutos: ela baixa o toolchain do ESP32 e
+compila micro-ROS da fonte.
 
 O ambiente (`humble`/`jazzy`) tem que casar com a distro da máquina que roda a
 máquina de estados. Cliente e workspace de distros diferentes conectam,
