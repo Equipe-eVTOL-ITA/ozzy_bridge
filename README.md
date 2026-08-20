@@ -126,8 +126,15 @@ Duas coisas que economizam uma tarde:
 - **`/ozzy/pose` e `/ozzy/twist` são BEST_EFFORT.** Um assinante com o QoS
   default do `rclpy` (RELIABLE) não casa: o tópico aparece no `ros2 topic list`,
   o `ros2 topic info` mostra o publicador, e nenhuma mensagem chega. Nenhum erro
-  em lugar nenhum. Veja `FAST_QOS` em
-  [ozzy_bridge/link_monitor.py](ozzy_bridge/link_monitor.py).
+  em lugar nenhum. Verificado nesta máquina, em Humble:
+
+  ```bash
+  ros2 topic echo /ozzy/pose geometry_msgs/msg/PoseStamped --qos-reliability best_effort  # imprime
+  ros2 topic echo /ozzy/pose geometry_msgs/msg/PoseStamped --qos-reliability reliable     # silêncio
+  ```
+
+  Copie o `FAST_QOS` de [ozzy_bridge/link_monitor.py](ozzy_bridge/link_monitor.py)
+  para qualquer nó que vá assinar esses dois tópicos.
 - **`/ozzy/statustext` é onde o ArduPilot explica por que não armou.** Deixe um
   `echo` aberto.
 

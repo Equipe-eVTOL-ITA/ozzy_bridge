@@ -20,6 +20,7 @@ import time
 import rclpy
 from diagnostic_msgs.msg import DiagnosticStatus
 from geometry_msgs.msg import PoseStamped
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, String
@@ -40,6 +41,20 @@ FAST_QOS = QoSProfile(
 
 STALE_S = 1.0     # sem pose por mais que isto, o dado é velho
 SILENT_S = 3.0    # sem nada por mais que isto, o link caiu
+
+
+def _level_int(level):
+    """`DiagnosticStatus.level` é `octet` no .msg, e o rclpy entrega `bytes`.
+
+    Comparar isso com um inteiro levanta TypeError dentro do callback, o que no
+    rclpy derruba o `spin()` inteiro — o monitor morre com stack trace no
+    primeiro diagnóstico que chega, ou seja, exatamente quando começa a ser
+    útil. O `int` no ramo de baixo é para o caso de alguma distro passar a
+    entregar inteiro; a função fica correta nos dois mundos.
+    """
+    if isinstance(level, (bytes, bytearray)):
+        return int.from_bytes(level, 'big')
+    return int(level)
 
 
 class LinkMonitor(Node):
@@ -71,7 +86,7 @@ class LinkMonitor(Node):
 
     def _on_diag(self, msg):
         self._diag = {kv.key: kv.value for kv in msg.values}
-        self._diag['_level'] = msg.level
+        self._diag['_level'] = _level_int(msg.level)
         self._diag['_message'] = msg.message
         self._diag_t = time.monotonic()
 
@@ -152,7 +167,13 @@ def main(args=None):
     node = LinkMonitor()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
+        # As duas formas de ser encerrado. `KeyboardInterrupt` é o Ctrl-C
+        # direto; `ExternalShutdownException` é o que o rclpy levanta quando o
+        # SIGINT vem de fora — que é o caso do `ros2 launch` desligando. Sem o
+        # segundo, todo encerramento normal do launch deixa um stack trace no
+        # log, e stack trace em log de encerramento treina o time a ignorar
+        # stack trace.
         pass
     finally:
         node.destroy_node()

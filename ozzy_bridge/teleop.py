@@ -23,6 +23,7 @@ import tty
 
 import rclpy
 from geometry_msgs.msg import TwistStamped
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 
@@ -126,7 +127,7 @@ def main(args=None):
             if key == '\x03':      # Ctrl-C
                 break
             node.set_from_key(key)
-    except (KeyboardInterrupt, OSError):
+    except (KeyboardInterrupt, ExternalShutdownException, OSError):
         pass
     finally:
         # Sai sempre mandando zero. Um teleop que morre deixando o último

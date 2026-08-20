@@ -74,7 +74,31 @@ quase tudo.
 | `/ozzy/statustext` | `std_msgs/String` | — | evento | `STATUSTEXT` |
 | `/ozzy/diagnostics` | `diagnostic_msgs/DiagnosticStatus` | — | 1 Hz | interno |
 
-Duas observações que economizam uma tarde:
+### QoS
+
+`/ozzy/pose`, `/ozzy/twist`, `/ozzy/battery` e `/ozzy/gps` são **BEST_EFFORT**.
+`/ozzy/armed`, `/ozzy/mode`, `/ozzy/statustext` e `/ozzy/diagnostics` são
+**RELIABLE**.
+
+O critério: num link de rádio, QoS confiável transforma um pacote perdido em
+retransmissão, e a retransmissão atrasa o dado *seguinte* — que já é mais novo e
+mais útil. Telemetria de alta taxa prefere perder; evento prefere esperar.
+
+O preço é uma armadilha, e ela é silenciosa: **um assinante RELIABLE não recebe
+nada de um publicador BEST_EFFORT**. O tópico aparece no `ros2 topic list`, o
+`ros2 topic info` mostra o publicador, e nenhuma mensagem chega — sem erro em
+lugar nenhum. Verificado em Humble:
+
+```bash
+ros2 topic echo /ozzy/pose geometry_msgs/msg/PoseStamped --qos-reliability best_effort  # imprime
+ros2 topic echo /ozzy/pose geometry_msgs/msg/PoseStamped --qos-reliability reliable     # silêncio
+```
+
+O default do `rclpy` e do `rclcpp` é RELIABLE. Todo nó que assinar os quatro
+primeiros precisa declarar BEST_EFFORT explicitamente — veja `FAST_QOS` em
+[`ozzy_bridge/link_monitor.py`](../ozzy_bridge/link_monitor.py).
+
+### Duas observações que economizam uma tarde
 
 **`/ozzy/twist` mistura frames de propósito.** O `linear` é velocidade de mundo
 em ENU (`frame_id: map`); o `angular` são as taxas de corpo em FLU. É
