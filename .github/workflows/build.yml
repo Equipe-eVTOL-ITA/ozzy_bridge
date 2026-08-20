@@ -1,0 +1,158 @@
+# =============================================================================
+# CI — compila as DUAS metades da ponte. Elas quebram de formas diferentes.
+# =============================================================================
+#
+# Este repositório é o único do workspace com duas cadeias de build: o pacote
+# ROS 2, compilado pelo colcon, e o firmware do ESP32, compilado pelo
+# PlatformIO. Um CI que só rodasse a primeira metade daria verde com o firmware
+# quebrado — e o firmware é justamente a metade que ninguém consegue conferir
+# sem uma placa na mão.
+#
+# POR QUE ESTE CI NÃO IMPORTA O evtol.repos
+#
+# Os outros repositórios do time importam o manifesto para compilar contra as
+# versões pinadas. Aqui isso seria clonar e compilar ~20 repositórios para
+# nada: o `ozzy_bridge` depende só de rclpy, std_msgs, geometry_msgs,
+# sensor_msgs, diagnostic_msgs e std_srvs — nenhum pacote da equipe. Se um dia
+# ele passar a depender do `custom_msgs` ou do `fsm`, este job passa a importar
+# o manifesto como os outros.
+# =============================================================================
+
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Metade 1: o pacote ROS 2, nas duas distros que o time voa.
+  # ---------------------------------------------------------------------------
+  ros:
+    name: ros (${{ matrix.distro }})
+    runs-on: ubuntu-latest
+    container: ros:${{ matrix.distro }}-ros-base
+
+    strategy:
+      fail-fast: false
+      matrix:
+        distro:
+          - humble   # Jetson Orin Nano + máquina de desenvolvimento
+          - jazzy    # Raspberry Pi
+
+    steps:
+      - name: Instalar ferramentas
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            git python3-colcon-common-extensions python3-pip
+
+      - uses: actions/checkout@v4
+        with:
+          path: src/ozzy_bridge
+
+      - name: rosdep
+        run: |
+          rosdep update --rosdistro ${{ matrix.distro }}
+          rosdep install --from-paths src --ignore-src -y \
+            --rosdistro ${{ matrix.distro }} || \
+            echo "::warning::rosdep reportou erros; seguindo para o build"
+
+      - name: Compilar
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.distro }}/setup.bash
+          colcon build --packages-select ozzy_bridge --event-handlers console_direct+
+
+      - name: Importar os nós
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.distro }}/setup.bash
+          source install/setup.bash
+          # Um import de verdade pega o que a sintaxe não pega: nome de campo
+          # que não existe na mensagem, política de QoS renomeada entre
+          # distros, entry_point apontando para função inexistente.
+          python3 -c "import ozzy_bridge.link_monitor, ozzy_bridge.teleop"
+          ros2 pkg executables ozzy_bridge
+
+      - name: Carregar o launch
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.distro }}/setup.bash
+          source install/setup.bash
+          # `-p` faz o launch imprimir a descrição e sair, sem executar nada.
+          # Pega argumento mal declarado e import quebrado no arquivo de launch.
+          ros2 launch ozzy_bridge ozzy.launch.py -p
+
+  # ---------------------------------------------------------------------------
+  # Metade 2: o firmware do ESP32, nas duas distros.
+  #
+  # Este job compila micro-ROS DA FONTE (é o que o micro_ros_platformio faz), e
+  # por isso demora vários minutos. É o preço de saber que o firmware compila
+  # sem ter a placa por perto — e é o único job que valida os pins de versão do
+  # platformio.ini, que são a parte mais frágil deste repositório.
+  # ---------------------------------------------------------------------------
+  firmware:
+    name: firmware (${{ matrix.distro }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [humble, jazzy]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar PlatformIO e o que o micro-ROS pede
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends git cmake
+          pip install --upgrade platformio
+
+      - name: Cache do PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            firmware/vendor
+          key: pio-${{ matrix.distro }}-${{ hashFiles('firmware/platformio.ini', 'firmware/scripts/fetch_mavlink.py') }}
+
+      - name: secrets.h de mentira
+        # O firmware não compila sem secrets.h, e secrets.h nunca é versionado.
+        # Os valores não importam: nada aqui liga em rede nenhuma.
+        run: |
+          sed -e 's/rede-da-equipe/ci/' -e 's/senha-da-rede/ci/' \
+              firmware/include/secrets.h.example > firmware/include/secrets.h
+
+      - name: Compilar
+        run: pio run -d firmware -e ${{ matrix.distro }}
+
+  # ---------------------------------------------------------------------------
+  # Lint — informativo, não bloqueia. Mesma política do resto do workspace.
+  # ---------------------------------------------------------------------------
+  lint:
+    name: lint (informativo)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install flake8
+      - run: flake8 ozzy_bridge launch --max-line-length 99
+      - name: Sintaxe dos scripts de shell
+        run: |
+          erros=0
+          while IFS= read -r f; do
+            bash -n "$f" || { echo "::error file=$f::erro de sintaxe"; erros=1; }
+          done < <(find . -name '*.sh' -not -path './.git/*')
+          exit $erros

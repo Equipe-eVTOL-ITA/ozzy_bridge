@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>ozzy_bridge</name>
+  <version>0.1.0</version>
+  <description>
+    Ponte entre ROS 2 e uma Pixhawk 2.4.8 rodando ArduPilot, com um ESP32 no
+    meio falando micro-ROS de um lado e MAVLink do outro. Este pacote é o lado
+    do computador: monitor de link, teleop de bancada e launch do agente. O
+    firmware do ESP32 está em firmware/, fora do workspace colcon.
+  </description>
+  <maintainer email="angelo.marconi.pavan@gmail.com">marconipavan</maintainer>
+  <license>MIT</license>
+
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>diagnostic_msgs</depend>
+  <depend>std_srvs</depend>
+
+  <!-- O MicroXRCEAgent NÃO é declarado aqui: ele não é pacote ROS, não vive em
+       src/ e não tem chave no rosdep. Ele é pré-requisito do workspace, pinado
+       em v3.0.1 no env/<perfil>.yaml do evtol-dev e conferido pelo doctor.sh —
+       o mesmo binário que o time já usa para o PX4. Declará-lo aqui só faria o
+       `rosdep install` falhar numa chave inexistente, que é exatamente o bug
+       que tirou o `opencv-python` do package.xml do telemetry_handler. -->
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

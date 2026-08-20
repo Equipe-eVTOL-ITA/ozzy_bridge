@@ -1,0 +1,5 @@
+.pio/
+vendor/
+
+# Credenciais de WiFi. O exemplo está versionado; o arquivo preenchido, nunca.
+include/secrets.h

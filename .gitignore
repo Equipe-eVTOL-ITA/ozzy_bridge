@@ -1,0 +1,17 @@
+# --- ROS 2 / colcon ---
+build/
+install/
+log/
+*.pyc
+__pycache__/
+*.egg-info/
+.pytest_cache/
+
+# --- PlatformIO (o firmware tem o próprio .gitignore também) ---
+firmware/.pio/
+firmware/vendor/
+firmware/include/secrets.h
+
+# --- editor ---
+.vscode/
+compile_commands.json
